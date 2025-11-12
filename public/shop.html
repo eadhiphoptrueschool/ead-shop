@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Shop – EAD HIP HOP TRUE SCHOOL</title>
+<style>
+body {font-family:Inter, sans-serif; background:#000; color:#fff; padding:24px}
+.products {display:flex;gap:16px;flex-wrap:wrap}
+.card {background:#111;padding:12px;border-radius:10px;width:240px;text-align:center}
+img {max-width:100%}
+.btn {display:inline-block;padding:8px 10px;background:#ff0000;color:#fff;border-radius:8px;text-decoration:none;cursor:pointer;margin-top:8px}
+</style>
+</head>
+<body>
+<h1 style="color:#ff0000;text-align:center">Shop EAD</h1>
+<div id="products" class="products">
+  <!-- Esempio 2 prodotti -->
+  <div class="card">
+    <img src="/Immagini/Crop Top Donna nero.jpg" alt="Crop Top donna Nero">
+    <h3>Crop Top Donna Nero</h3>
+    <p>€ 25.00</p>
+    <input type="number" min="1" value="1" id="qty-prod_tshirt" style="width:60px">
+    <button class="btn" onclick="addToCart({id:'prod_tshirt', quantity:parseInt(document.getElementById('qty-prod_tshirt').value)})">Aggiungi</button>
+  </div>
+  <div class="card">
+    <img src="/Immagini/Canotta .jpg" alt="Canotta Grigia">
+    <h3>Canotta Grigia</h3>
+    <p>€ 45.00</p>
+    <input type="number" min="1" value="1" id="qty-prod_felpa" style="width:60px">
+    <button class="btn" onclick="addToCart({id:'prod_felpa', quantity:parseInt(document.getElementById('qty-prod_felpa').value)})">Aggiungi</button>
+  </div>
+</div>
+
+<div style="position:fixed;right:20px;top:20px;background:#111;padding:10px;border-radius:8px" id="cartBox">
+  <strong>Carrello</strong>
+  <div id="cartItems">Vuoto</div>
+  <button id="checkoutBtn" class="btn">Vai al pagamento</button>
+</div>
+
+<script>
+let cart = [];
+function addToCart(item){
+  const ex = cart.find(i=>i.id===item.id);
+  if(ex) ex.quantity += item.quantity;
+  else cart.push(item);
+  renderCart();
+}
+function renderCart(){
+  const el = document.getElementById('cartItems');
+  if(!cart.length) return el.innerHTML = 'Vuoto';
+  el.innerHTML = cart.map(i=>`${i.id} x ${i.quantity}`).join('<br>');
+}
+
+document.getElementById('checkoutBtn').addEventListener('click', async ()=>{
+  if(!cart.length) return alert('Carrello vuoto');
+  const API_URL = ""; // Inserisci qui il tuo backend Render/localhost
+  const res = await fetch(API_URL + '/create-checkout-session',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({items: cart})
+  });
+  const data = await res.json();
+  if(data.url) window.location = data.url;
+  else alert('Errore: ' + (data.error || ''));
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+[
+  {
+    "id": "prod_tshirt",
+    "name": "T-Shirt EAD True School",
+    "price": 2500,
+    "currency": "eur",
+    "image": "/images/tshirt.png"
+  },
+  {
+    "id": "prod_felpa",
+    "name": "Felpa EAD True School",
+    "price": 4500,
+    "currency": "eur",
+    "image": "/images/felpa.png"
+  },
+  {
+    "id": "prod_cappello",
+    "name": "Cappellino EAD True School",
+    "price": 2000,
+    "currency": "eur",
+    "image": "/images/cap.png"
+  }
+]
