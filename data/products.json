@@ -4,13 +4,21 @@
     "name": "Canotta 10 Elements Camp",
     "price": 2500,
     "currency": "eur",
-    "image": "immagini/shop/canotta.jpg"
+    "image": "immagini/shop/canotta.jpg",
+    "options": {
+      "taglia": ["XS", "S", "M", "L", "XL", "XXL"],
+      "colore": ["bianco", "nero", "grigio"]
+    }
   },
   {
     "id": "prod_croptop",
     "name": "Crop Top Donna Elements",
     "price": 2000,
     "currency": "eur",
-    "image": "immagini/shop/croptopdonnanero.jpg"
+    "image": "immagini/shop/croptopdonnanero.jpg",
+    "options": {
+      "taglia": ["XS", "S", "M", "L"],
+      "colore": ["bianco", "nero", "grigio"]
+    }
   }
 ]
