@@ -1,23 +1,16 @@
 [
   {
-    "id": "prod_tshirt",
-    "name": "T-Shirt EAD True School",
+    "id": "prod_canotta",
+    "name": "Canotta 10 Elements Camp",
     "price": 2500,
     "currency": "eur",
-    "image": "/images/tshirt.png"
+    "image": "immagini/shop/canotta.jpg"
   },
   {
-    "id": "prod_felpa",
-    "name": "Felpa EAD True School",
-    "price": 4500,
-    "currency": "eur",
-    "image": "/images/felpa.png"
-  },
-  {
-    "id": "prod_cappello",
-    "name": "Cappellino EAD True School",
+    "id": "prod_croptop",
+    "name": "Crop Top Donna Elements",
     "price": 2000,
     "currency": "eur",
-    "image": "/images/cap.png"
+    "image": "immagini/shop/croptopdonnanero.jpg"
   }
 ]
