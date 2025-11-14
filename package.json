@@ -1,14 +1,7 @@
-{
-  "name": "ead-shop-server",
-  "version": "1.0.0",
-  "main": "server.js",
-  "scripts": {
-    "start": "node server.js"
-  },
-  "dependencies": {
+"dependencies": {
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
+    "@sendgrid/mail": "^7.7.0", // <--- DEVE ESSERE PRESENTE
     "stripe": "^14.25.0"
-  }
 }
