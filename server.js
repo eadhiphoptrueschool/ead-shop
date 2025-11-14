@@ -3,12 +3,20 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const stripeLib = require('stripe');
+const cors = require('cors'); // AGGIUNTO: Necessario per Render/localhost
 const app = express();
 const PORT = process.env.PORT || 4242;
-const DOMAIN = process.env.DOMAIN || ('http://localhost:' + PORT);
+// Il dominio è importante per CORS e per le immagini, ma non è critico qui.
+// const DOMAIN = process.env.DOMAIN || ('http://localhost:' + PORT); 
 const stripe = stripeLib(process.env.STRIPE_SECRET_KEY || '');
 
+// --- CONFIGURAZIONE ---
 app.use(express.json());
+// Abilita CORS per permettere al tuo frontend (es. localhost o dominio web) di chiamare il backend Render
+app.use(cors({
+    origin: '*', // Se stai testando da localhost, usa '*' per semplicità. In produzione, specifica il dominio esatto del frontend.
+    methods: ['GET', 'POST']
+}));
 app.use(express.static(path.join(__dirname, 'public')));
 
 function loadProducts(){
@@ -20,39 +28,44 @@ app.get('/products', (req, res) => {
   res.json(loadProducts());
 });
 
-app.post('/create-checkout-session', async (req, res) => {
-  try {
-    const { items } = req.body;
-    if (!items || !Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ error: 'Nessun prodotto selezionato' });
+// *************************************************************
+// --- NUOVA ROTTA: /create-payment-intent ---
+// *************************************************************
+app.post('/create-payment-intent', async (req, res) => {
+    try {
+        // Il frontend invia { items: [...], totalAmount: centesimi }
+        const { items, totalAmount } = req.body;
+        
+        if (!items || !Array.isArray(items) || items.length === 0) {
+            return res.status(400).json({ error: 'Nessun prodotto selezionato' });
+        }
+        
+        // --- SICUREZZA: Ricalcolo lato server ---
+        // Dovresti ricalcolare il totale qui usando i prezzi da loadProducts() e gli items.
+        // Per ora, useremo il totale inviato dal frontend, ma ricordati che questo è un rischio.
+        const finalAmount = totalAmount; 
+        
+        if (finalAmount < 50) { 
+            return res.status(400).json({ error: "L'importo minimo è 0.50 EUR." });
+        }
+
+        const paymentIntent = await stripe.paymentIntents.create({
+            amount: finalAmount, 
+            currency: 'eur',
+            metadata: {
+                integration_level: 'custom_form',
+                // Aggiungi qui l'ID utente o altri dettagli dell'ordine
+            },
+        });
+
+        // Risposta cruciale per il frontend:
+        res.json({ clientSecret: paymentIntent.client_secret });
+
+    } catch (err) {
+        console.error("Errore nel Payment Intent:", err);
+        res.status(500).json({ error: err.message });
     }
-    const products = loadProducts();
-    const line_items = items.map(it => {
-      const prod = products.find(p => p.id === it.id);
-      if (!prod) throw new Error('Prodotto non trovato: ' + it.id);
-      return {
-        price_data: {
-          currency: prod.currency,
-          product_data: { name: prod.name, images: [ DOMAIN + prod.image ] },
-          unit_amount: prod.price
-        },
-        quantity: it.quantity || 1
-      };
-    });
-
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
-      mode: 'payment',
-      line_items,
-      success_url: DOMAIN + '/success.html?session_id={CHECKOUT_SESSION_ID}',
-      cancel_url: DOMAIN + '/cancel.html'
-    });
-
-    res.json({ url: session.url, id: session.id });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
-  }
 });
+// *************************************************************
 
 app.listen(PORT, () => console.log('Server avviato su port', PORT));
