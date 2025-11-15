@@ -6,7 +6,8 @@ const mongoose = require('mongoose');
 // Legge le chiavi dalla variabile d'ambiente di Render
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 const sendGridApiKey = process.env.SENDGRID_API_KEY; 
-const mongoURI = "mongodb+srv://eadshopuser:Harlem_74@eadshop-cluster.vqeyosy.mongodb.net/eadshopdb?appName=eadshop-cluster"; // Stringa fornita
+// La stringa di connessione è definita qui PER GLI ERRORI PASSATI, ma DEVE essere anche su MONGO_URI
+const mongoURI = "mongodb+srv://eadshopuser:Harlem_74@eadshop-cluster.vqeyosy.mongodb.net/eadshopdb?appName=eadshop-cluster"; 
 
 // Inizializzazione Servizi
 const stripe = require('stripe')(stripeSecretKey);
@@ -16,9 +17,9 @@ sgMail.setApiKey(sendGridApiKey);
 const app = express();
 const port = process.env.PORT || 10000; 
 
-// Permette le richieste dal frontend
+// --- Middleware ---
 app.use(cors({
-    origin: '*', // Permette tutte le origini per semplicità di deploy
+    origin: '*', 
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
@@ -28,11 +29,12 @@ app.use(express.json());
 
 const connectDB = async () => {
     try {
-        await mongoose.connect(mongoURI);
+        // Usa la variabile d'ambiente su Render. Se fallisce, usa la stringa hardcoded.
+        const connectionString = process.env.MONGO_URI || mongoURI; 
+        await mongoose.connect(connectionString);
         console.log('MongoDB connesso con successo.');
     } catch (error) {
         console.error('Connessione MongoDB fallita:', error.message);
-        // Il server continua a girare anche se la connessione fallisce per ora.
     }
 };
 
@@ -43,7 +45,7 @@ connectDB();
 const ProductSchema = new mongoose.Schema({
     name: { type: String, required: true },
     quantity: { type: Number, required: true },
-    price: { type: Number, required: true }
+    price: { type: Number, required: true } // Prezzo in centesimi
 });
 
 const OrderSchema = new mongoose.Schema({
@@ -56,16 +58,34 @@ const OrderSchema = new mongoose.Schema({
 
 const Order = mongoose.model('Order', OrderSchema);
 
-// --- 3. Route di Pagamento e Salvataggio Ordini ---
+// -------------------------------------------------------------
+// --- 3. Route per il Caricamento dei Prodotti (FIX 404) ---
+// -------------------------------------------------------------
+
+app.get('/products', (req, res) => {
+    // Lista dei prodotti che il frontend si aspetta di ricevere per popolare lo shop
+    const items = [
+        // NOTA: I prezzi sono in centesimi
+        { id: 1, name: "T-Shirt Logo", price: 2500, quantity: 1 },
+        { id: 2, name: "Felpa Vintage", price: 5500, quantity: 1 },
+        { id: 3, name: "Cappello Snapback", price: 1800, quantity: 1 },
+        // Aggiungi qui gli altri prodotti del tuo e-commerce...
+    ];
+    res.json(items);
+});
+
+
+// -------------------------------------------------------------
+// --- 4. Route di Pagamento e Salvataggio Ordini ---
+// -------------------------------------------------------------
 
 app.post('/create-payment-intent', async (req, res) => {
     try {
-        // Dati ricevuti dal frontend (assicurati che il frontend invii 'shipping')
         const { items, totalAmount, customerEmail, shipping } = req.body; 
 
         // 1. ELABORAZIONE PAGAMENTO CON STRIPE
         const paymentIntent = await stripe.paymentIntents.create({
-            amount: totalAmount, // Assumi che sia già in centesimi
+            amount: totalAmount, 
             currency: 'eur',
             automatic_payment_methods: { enabled: true },
             receipt_email: customerEmail,
@@ -76,7 +96,6 @@ app.post('/create-payment-intent', async (req, res) => {
             products: items.map(item => ({
                 name: item.name,
                 quantity: item.quantity,
-                // Moltiplichiamo il prezzo in centesimi per non avere problemi di floating point
                 price: item.price
             })),
             customerEmail: customerEmail,
@@ -87,12 +106,12 @@ app.post('/create-payment-intent', async (req, res) => {
         await newOrder.save();
         console.log('Ordine salvato con ID:', newOrder._id);
 
-        // 3. INVIO EMAIL DI CONFERMA (Logica esistente)
+        // 3. INVIO EMAIL DI CONFERMA (Logica SendGrid)
         const productsList = items.map(item => `${item.name} (${item.quantity}x @ €${(item.price / 100).toFixed(2)})`).join('\n');
         
         const msg = {
             to: customerEmail,
-            from: 'bboyzinko@gmail.com', // Indirizzo Mittente VERIFICATO
+            from: 'bboyzinko@gmail.com', 
             subject: 'Conferma Ordine ead-shop',
             html: `
                 <h1>Grazie per il tuo ordine!</h1>
@@ -110,7 +129,6 @@ app.post('/create-payment-intent', async (req, res) => {
             console.error('ERRORE INVIO EMAIL (SendGrid):', error.response.body.errors);
         }
 
-        // Risposta finale di successo al frontend
         res.json({ clientSecret: paymentIntent.client_secret });
 
     } catch (error) {
@@ -119,12 +137,14 @@ app.post('/create-payment-intent', async (req, res) => {
     }
 });
 
-// --- 4. Route Amministrativa per Visualizzare gli Ordini ---
 
-// Permette di visualizzare tutti gli ordini salvati nel database
+// -------------------------------------------------------------
+// --- 5. Route Amministrativa per Visualizzare gli Ordini ---
+// -------------------------------------------------------------
+
 app.get('/admin/orders', async (req, res) => {
     try {
-        // Estrae tutti gli ordini e li ordina dal più recente
+        // Questa route verifica anche che la connessione MongoDB sia attiva
         const orders = await Order.find().sort({ orderDate: -1 }); 
         res.json(orders);
     } catch (error) {
