@@ -1,7 +1,7 @@
 {
   "name": "ead-shop-backend",
   "version": "1.0.0",
-  "description": "Backend server for e-commerce shop",
+  "description": "Backend server for e-commerce shop with Stripe, SendGrid, and MongoDB. ", <-- SOSTITUISCI QUI
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
