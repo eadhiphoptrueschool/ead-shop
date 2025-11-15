@@ -1,16 +1,16 @@
 {
   "name": "ead-shop-backend",
   "version": "1.0.0",
-  "description": "Backend server for e-commerce shop with Stripe, SendGrid, and MongoDB. ", <-- SOSTITUISCI QUI
+  "description": "Backend server for e-commerce shop with Stripe, SendGrid, and MongoDB.",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "postinstall": "npm install"  <-- AGGIUNGI QUESTA RIGA
+    "start": "node server.js"
   },
   "dependencies": {
-    // ... tutte le tue dipendenze, incluse mongoose ...
-  },
-  "devDependencies": {
-    // ...
+    "@sendgrid/mail": "^7.7.0",
+    "cors": "^2.8.5",
+    "express": "^4.18.3",
+    "mongoose": "^8.0.3",
+    "stripe": "^14.12.0"
   }
-} // <--- Deve finire con una sola parentesi graffa chiusa
+}
