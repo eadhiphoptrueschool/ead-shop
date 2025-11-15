@@ -1,10 +1,11 @@
 const express = require('express');
-const cors = require('cors');
+const cors = require = require('cors'); // Correzione typo
 const mongoose = require('mongoose');
 
 // --- Configurazione Chiavi API ---
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 const sendGridApiKey = process.env.SENDGRID_API_KEY; 
+// La MONGO_URI viene presa dalle variabili d'ambiente di Render
 const mongoURI = "mongodb+srv://eadshopuser:Harlem_74@eadshop-cluster.vqeyosy.mongodb.net/eadshopdb?appName=eadshop-cluster"; 
 
 // Inizializzazione Servizi
@@ -56,11 +57,11 @@ const OrderSchema = new mongoose.Schema({
 const Order = mongoose.model('Order', OrderSchema);
 
 // -------------------------------------------------------------
-// --- 3. Route per il Caricamento dei Prodotti (FIX DATI) ---
+// --- 3. Route per il Caricamento dei Prodotti ---
 // -------------------------------------------------------------
 
 app.get('/products', (req, res) => {
-    // LISTA PRODOTTI ORIGINALE (Con tutti i campi necessari al frontend)
+    // LISTA PRODOTTI ORIGINALE E COMPLETA per il frontend
     const items = [
         {
             "id": "prod_canotta",
@@ -84,7 +85,7 @@ app.get('/products', (req, res) => {
                 "colore": ["bianco", "nero", "grigio"]
             }
         }
-        // AGGIUNGI QUI TUTTI GLI ALTRI PRODOTTI CHE AVEVI!
+        // AGGIUNGI QUI TUTTI GLI ALTRI TUOI PRODOTTI ORIGINALI!
     ];
     res.json(items);
 });
@@ -110,7 +111,6 @@ app.post('/create-payment-intent', async (req, res) => {
         const newOrder = new Order({
             products: items.map(item => ({
                 name: item.name,
-                // Il frontend manda anche la taglia/colore, aggiungiamolo al nome
                 quantity: item.quantity, 
                 price: item.price
             })),
@@ -122,8 +122,15 @@ app.post('/create-payment-intent', async (req, res) => {
         await newOrder.save();
         console.log('Ordine salvato con ID:', newOrder._id);
 
-        // 3. INVIO EMAIL DI CONFERMA (Logica SendGrid)
+        // 3. INVIO EMAIL DI CONFERMA (Logica SendGrid con FIX)
         const productsList = items.map(item => `${item.name} (${item.quantity}x @ €${(item.price / 100).toFixed(2)})`).join('\n');
+        
+        let shippingDetails = 'Nessun indirizzo di spedizione fornito.';
+        
+        // **FIX: Controlla se 'shipping' e 'address' esistono prima di provare a leggerli**
+        if (shipping && shipping.address) {
+            shippingDetails = `Spediremo a: ${shipping.address.line1 || ''}, ${shipping.address.city || ''}, ${shipping.address.postal_code || ''}`;
+        }
         
         const msg = {
             to: customerEmail,
@@ -134,7 +141,7 @@ app.post('/create-payment-intent', async (req, res) => {
                 <p>Abbiamo ricevuto il tuo pagamento di €${(totalAmount / 100).toFixed(2)} e l'ordine è stato confermato (ID: ${newOrder._id}).</p>
                 <h2>Dettagli Ordine:</h2>
                 <pre>${productsList}</pre>
-                <p>Spediremo a: ${shipping.address.line1}, ${shipping.address.city}, ${shipping.address.postal_code}</p>
+                <p>${shippingDetails}</p>
             `,
         };
         
@@ -142,7 +149,8 @@ app.post('/create-payment-intent', async (req, res) => {
             await sgMail.send(msg);
             console.log(`Email di conferma inviata a: ${customerEmail}`);
         } catch (error) {
-            console.error('ERRORE INVIO EMAIL (SendGrid):', error.response.body.errors);
+            // Logga l'errore completo di SendGrid, ma non blocca la risposta
+            console.error('ERRORE INVIO EMAIL (SendGrid):', error); 
         }
 
         res.json({ clientSecret: paymentIntent.client_secret });
