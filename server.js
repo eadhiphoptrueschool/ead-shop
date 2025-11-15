@@ -3,10 +3,8 @@ const cors = require('cors');
 const mongoose = require('mongoose');
 
 // --- Configurazione Chiavi API ---
-// Legge le chiavi dalla variabile d'ambiente di Render
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 const sendGridApiKey = process.env.SENDGRID_API_KEY; 
-// La stringa di connessione è definita qui PER GLI ERRORI PASSATI, ma DEVE essere anche su MONGO_URI
 const mongoURI = "mongodb+srv://eadshopuser:Harlem_74@eadshop-cluster.vqeyosy.mongodb.net/eadshopdb?appName=eadshop-cluster"; 
 
 // Inizializzazione Servizi
@@ -29,7 +27,6 @@ app.use(express.json());
 
 const connectDB = async () => {
     try {
-        // Usa la variabile d'ambiente su Render. Se fallisce, usa la stringa hardcoded.
         const connectionString = process.env.MONGO_URI || mongoURI; 
         await mongoose.connect(connectionString);
         console.log('MongoDB connesso con successo.');
@@ -45,7 +42,7 @@ connectDB();
 const ProductSchema = new mongoose.Schema({
     name: { type: String, required: true },
     quantity: { type: Number, required: true },
-    price: { type: Number, required: true } // Prezzo in centesimi
+    price: { type: Number, required: true }
 });
 
 const OrderSchema = new mongoose.Schema({
@@ -59,17 +56,35 @@ const OrderSchema = new mongoose.Schema({
 const Order = mongoose.model('Order', OrderSchema);
 
 // -------------------------------------------------------------
-// --- 3. Route per il Caricamento dei Prodotti (FIX 404) ---
+// --- 3. Route per il Caricamento dei Prodotti (FIX DATI) ---
 // -------------------------------------------------------------
 
 app.get('/products', (req, res) => {
-    // Lista dei prodotti che il frontend si aspetta di ricevere per popolare lo shop
+    // LISTA PRODOTTI ORIGINALE (Con tutti i campi necessari al frontend)
     const items = [
-        // NOTA: I prezzi sono in centesimi
-        { id: 1, name: "T-Shirt Logo", price: 2500, quantity: 1 },
-        { id: 2, name: "Felpa Vintage", price: 5500, quantity: 1 },
-        { id: 3, name: "Cappello Snapback", price: 1800, quantity: 1 },
-        // Aggiungi qui gli altri prodotti del tuo e-commerce...
+        {
+            "id": "prod_canotta",
+            "name": "Canotta 10 Elements Camp",
+            "price": 2500, // €25.00
+            "currency": "eur",
+            "image": "immagini/shop/canotta.jpg",
+            "options": {
+                "taglia": ["XS", "S", "M", "L", "XL", "XXL"],
+                "colore": ["bianco", "nero", "grigio"]
+            }
+        },
+        {
+            "id": "prod_croptop",
+            "name": "Crop Top Donna Elements",
+            "price": 2000, // €20.00
+            "currency": "eur",
+            "image": "immagini/shop/croptopdonnanero.jpg",
+            "options": {
+                "taglia": ["XS", "S", "M", "L"],
+                "colore": ["bianco", "nero", "grigio"]
+            }
+        }
+        // AGGIUNGI QUI TUTTI GLI ALTRI PRODOTTI CHE AVEVI!
     ];
     res.json(items);
 });
@@ -95,7 +110,8 @@ app.post('/create-payment-intent', async (req, res) => {
         const newOrder = new Order({
             products: items.map(item => ({
                 name: item.name,
-                quantity: item.quantity,
+                // Il frontend manda anche la taglia/colore, aggiungiamolo al nome
+                quantity: item.quantity, 
                 price: item.price
             })),
             customerEmail: customerEmail,
@@ -144,7 +160,6 @@ app.post('/create-payment-intent', async (req, res) => {
 
 app.get('/admin/orders', async (req, res) => {
     try {
-        // Questa route verifica anche che la connessione MongoDB sia attiva
         const orders = await Order.find().sort({ orderDate: -1 }); 
         res.json(orders);
     } catch (error) {
