@@ -1,16 +1,8 @@
-{
-  "name": "ead-shop-backend",
-  "version": "1.0.0",
-  "description": "Backend per EAD Shop con Stripe e SendGrid",
-  "main": "server.js",
-  "scripts": {
-    "start": "node server.js"
-  },
-  "dependencies": {
+"dependencies": {
     "@sendgrid/mail": "^7.7.0",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
-    "stripe": "^14.25.0"
-  }
-}
+    "mongoose": "^8.0.3",  <-- ASSICURATI CHE CI SIA QUESTA RIGA!
+    "stripe": "^14.12.0"
+  },
