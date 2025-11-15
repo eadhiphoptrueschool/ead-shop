@@ -1,12 +1,13 @@
 const express = require('express');
-const cors = require = require('cors'); // Correzione typo
+const cors = require('cors'); // Correzione dell'errore di battitura
 const mongoose = require('mongoose');
 
 // --- Configurazione Chiavi API ---
+// Render leggerà queste variabili d'ambiente
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 const sendGridApiKey = process.env.SENDGRID_API_KEY; 
-// La MONGO_URI viene presa dalle variabili d'ambiente di Render
-const mongoURI = "mongodb+srv://eadshopuser:Harlem_74@eadshop-cluster.vqeyosy.mongodb.net/eadshopdb?appName=eadshop-cluster"; 
+// MONGO_URI viene presa dalle variabili d'ambiente di Render
+const mongoURI = process.env.MONGO_URI; 
 
 // Inizializzazione Servizi
 const stripe = require('stripe')(stripeSecretKey);
@@ -28,8 +29,7 @@ app.use(express.json());
 
 const connectDB = async () => {
     try {
-        const connectionString = process.env.MONGO_URI || mongoURI; 
-        await mongoose.connect(connectionString);
+        await mongoose.connect(mongoURI);
         console.log('MongoDB connesso con successo.');
     } catch (error) {
         console.error('Connessione MongoDB fallita:', error.message);
@@ -57,7 +57,7 @@ const OrderSchema = new mongoose.Schema({
 const Order = mongoose.model('Order', OrderSchema);
 
 // -------------------------------------------------------------
-// --- 3. Route per il Caricamento dei Prodotti ---
+// --- 3. Route per il Caricamento dei Prodotti (FIX DATI) ---
 // -------------------------------------------------------------
 
 app.get('/products', (req, res) => {
@@ -149,7 +149,6 @@ app.post('/create-payment-intent', async (req, res) => {
             await sgMail.send(msg);
             console.log(`Email di conferma inviata a: ${customerEmail}`);
         } catch (error) {
-            // Logga l'errore completo di SendGrid, ma non blocca la risposta
             console.error('ERRORE INVIO EMAIL (SendGrid):', error); 
         }
 
