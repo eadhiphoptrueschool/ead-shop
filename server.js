@@ -37,7 +37,7 @@ async function sendOrderConfirmation(customerEmail, orderId, total) {
     // ⚠️ SOSTITUISCI 'confirmed@tuodominio.it' con un indirizzo email VERIFICATO su SendGrid!
     const msg = {
         to: customerEmail,
-        from: 'eadhiphoptrueschool@gmail.com', 
+        from: 'bboyzinko@gmail.com', 
         subject: `Conferma Ordine EAD Shop #${orderId}`,
         html: `
             <h1>Grazie per il tuo ordine!</h1>
