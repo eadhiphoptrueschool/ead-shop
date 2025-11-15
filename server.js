@@ -1,118 +1,140 @@
-require('dotenv').config();
 const express = require('express');
-const fs = require('fs');
-const path = require('path');
-const stripeLib = require('stripe');
-const cors = require('cors'); 
-const sgMail = require('@sendgrid/mail'); // <-- SendGrid incluso
+const cors = require('cors');
+const mongoose = require('mongoose');
+
+// --- Configurazione Chiavi API ---
+// Legge le chiavi dalla variabile d'ambiente di Render
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+const sendGridApiKey = process.env.SENDGRID_API_KEY; 
+const mongoURI = "mongodb+srv://eadshopuser:Harlem_74@eadshop-cluster.vqeyosy.mongodb.net/eadshopdb?appName=eadshop-cluster"; // Stringa fornita
+
+// Inizializzazione Servizi
+const stripe = require('stripe')(stripeSecretKey);
+const sgMail = require('@sendgrid/mail');
+sgMail.setApiKey(sendGridApiKey);
 
 const app = express();
-const PORT = process.env.PORT || 4242;
+const port = process.env.PORT || 10000; 
 
-// Inizializzazione API con chiavi segrete dalle variabili d'ambiente
-const stripe = stripeLib(process.env.STRIPE_SECRET_KEY || '');
-sgMail.setApiKey(process.env.SENDGRID_API_KEY || ''); 
-
-// --- CONFIGURAZIONE BASE ---
-app.use(express.json());
+// Permette le richieste dal frontend
 app.use(cors({
-    origin: '*', // Permette chiamate da qualsiasi dominio per i test (in produzione, specificare il dominio frontend)
-    methods: ['GET', 'POST']
+    origin: '*', // Permette tutte le origini per semplicità di deploy
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'Authorization']
 }));
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.json());
 
-// Funzione per caricare i dati dei prodotti
-function loadProducts(){
-  const raw = fs.readFileSync(path.join(__dirname, 'data', 'products.json'));
-  return JSON.parse(raw);
-}
+// --- 1. Connessione a MongoDB ---
 
-// --- ROTTA API PRODOTTI ---
-app.get('/products', (req, res) => {
-  res.json(loadProducts());
+const connectDB = async () => {
+    try {
+        await mongoose.connect(mongoURI);
+        console.log('MongoDB connesso con successo.');
+    } catch (error) {
+        console.error('Connessione MongoDB fallita:', error.message);
+        // Il server continua a girare anche se la connessione fallisce per ora.
+    }
+};
+
+connectDB();
+
+// --- 2. Schema e Modello degli Ordini (Mongoose) ---
+
+const ProductSchema = new mongoose.Schema({
+    name: { type: String, required: true },
+    quantity: { type: Number, required: true },
+    price: { type: Number, required: true }
 });
 
-// --- FUNZIONE HELPER: INVIO EMAIL CON SENDGRID ---
-async function sendOrderConfirmation(customerEmail, orderId, total) {
-    // ⚠️ SOSTITUISCI 'confirmed@tuodominio.it' con un indirizzo email VERIFICATO su SendGrid!
-    const msg = {
-        to: customerEmail,
-        from: 'bboyzinko@gmail.com', 
-        subject: `Conferma Ordine EAD Shop #${orderId}`,
-        html: `
-            <h1>Grazie per il tuo ordine!</h1>
-            <p>Il tuo pagamento di <b>€ ${(total / 100).toFixed(2)}</b> è stato completato con successo.</p>
-            <p>I dettagli dell'ordine saranno inviati separatamente. ID Transazione Stripe: ${orderId}</p>
-        `,
-    };
+const OrderSchema = new mongoose.Schema({
+    products: [ProductSchema],
+    customerEmail: { type: String, required: true },
+    totalAmount: { type: Number, required: true },
+    shippingAddress: { type: Object, required: false },
+    orderDate: { type: Date, default: Date.now }
+});
 
-    try {
-        await sgMail.send(msg);
-        console.log(`Email di conferma inviata a: ${customerEmail}`);
-    } catch (error) {
-        console.error('ERRORE INVIO EMAIL:', error);
-    }
-}
+const Order = mongoose.model('Order', OrderSchema);
 
+// --- 3. Route di Pagamento e Salvataggio Ordini ---
 
-// --- ROTTA 1: CREAZIONE PAYMENT INTENT (STRIPE) ---
 app.post('/create-payment-intent', async (req, res) => {
     try {
-        // Riceve l'email dal frontend per salvarla nei metadati Stripe
-        const { items, totalAmount, customerEmail } = req.body; 
-        
-        if (!items || !Array.isArray(items) || items.length === 0 || !customerEmail) {
-            return res.status(400).json({ error: 'Dati carrello o email mancanti.' });
-        }
-        
-        const finalAmount = totalAmount; 
-        
-        if (finalAmount < 50) { 
-            return res.status(400).json({ error: "L'importo minimo è 0.50 EUR." });
-        }
+        // Dati ricevuti dal frontend (assicurati che il frontend invii 'shipping')
+        const { items, totalAmount, customerEmail, shipping } = req.body; 
 
-        const orderId = 'EAD-' + Date.now(); // ID Ordine univoco per il tracking
-
+        // 1. ELABORAZIONE PAGAMENTO CON STRIPE
         const paymentIntent = await stripe.paymentIntents.create({
-            amount: finalAmount, 
+            amount: totalAmount, // Assumi che sia già in centesimi
             currency: 'eur',
-            metadata: {
-                order_id: orderId,
-                customer_email: customerEmail 
-            },
+            automatic_payment_methods: { enabled: true },
+            receipt_email: customerEmail,
         });
 
-        // Restituisce la chiave di conferma Stripe e l'ID Ordine al frontend
-        res.json({ clientSecret: paymentIntent.client_secret, orderId: orderId }); 
+        // 2. SALVATAGGIO DELL'ORDINE NEL DATABASE
+        const newOrder = new Order({
+            products: items.map(item => ({
+                name: item.name,
+                quantity: item.quantity,
+                // Moltiplichiamo il prezzo in centesimi per non avere problemi di floating point
+                price: item.price
+            })),
+            customerEmail: customerEmail,
+            totalAmount: totalAmount,
+            shippingAddress: shipping 
+        });
 
-    } catch (err) {
-        console.error("Errore nel Payment Intent:", err);
-        res.status(500).json({ error: err.message });
-    }
-});
+        await newOrder.save();
+        console.log('Ordine salvato con ID:', newOrder._id);
 
-
-// --- ROTTA 2: INVIO CONFERMA ORDINE (SENDGRID) ---
-// Chiamata dal frontend DOPO la conferma di pagamento Stripe
-app.post('/send-order-confirmation', async (req, res) => {
-    try {
-        const { orderId, total, customerEmail } = req.body;
-
-        if (!orderId || !total || !customerEmail) {
-            return res.status(400).json({ success: false, message: "Dati mancanti per la conferma email." });
+        // 3. INVIO EMAIL DI CONFERMA (Logica esistente)
+        const productsList = items.map(item => `${item.name} (${item.quantity}x @ €${(item.price / 100).toFixed(2)})`).join('\n');
+        
+        const msg = {
+            to: customerEmail,
+            from: 'bboyzinko@gmail.com', // Indirizzo Mittente VERIFICATO
+            subject: 'Conferma Ordine ead-shop',
+            html: `
+                <h1>Grazie per il tuo ordine!</h1>
+                <p>Abbiamo ricevuto il tuo pagamento di €${(totalAmount / 100).toFixed(2)} e l'ordine è stato confermato (ID: ${newOrder._id}).</p>
+                <h2>Dettagli Ordine:</h2>
+                <pre>${productsList}</pre>
+                <p>Spediremo a: ${shipping.address.line1}, ${shipping.address.city}, ${shipping.address.postal_code}</p>
+            `,
+        };
+        
+        try {
+            await sgMail.send(msg);
+            console.log(`Email di conferma inviata a: ${customerEmail}`);
+        } catch (error) {
+            console.error('ERRORE INVIO EMAIL (SendGrid):', error.response.body.errors);
         }
 
-        // Esegue l'invio email tramite la funzione helper
-        await sendOrderConfirmation(customerEmail, orderId, total);
+        // Risposta finale di successo al frontend
+        res.json({ clientSecret: paymentIntent.client_secret });
 
-        // Risponde con successo (non blocca il frontend anche se fallisce l'invio)
-        res.json({ success: true, message: "Email di conferma richiesta con successo." });
+    } catch (error) {
+        console.error('Errore critico nella route di pagamento:', error.message);
+        res.status(500).json({ error: 'Errore dal server: impossibile creare l\'intenzione di pagamento.' });
+    }
+});
 
-    } catch (err) {
-        console.error("Errore invio email endpoint:", err);
-        res.status(500).json({ success: false, message: "Errore nell'invio della mail." }); 
+// --- 4. Route Amministrativa per Visualizzare gli Ordini ---
+
+// Permette di visualizzare tutti gli ordini salvati nel database
+app.get('/admin/orders', async (req, res) => {
+    try {
+        // Estrae tutti gli ordini e li ordina dal più recente
+        const orders = await Order.find().sort({ orderDate: -1 }); 
+        res.json(orders);
+    } catch (error) {
+        console.error('Errore nel recupero degli ordini:', error.message);
+        res.status(500).json({ error: 'Impossibile recuperare gli ordini dal database.' });
     }
 });
 
 
-app.listen(PORT, () => console.log('Server avviato su port', PORT));
+// --- Avvio del Server ---
+app.listen(port, () => {
+    console.log(`Server attivo sulla porta ${port}`);
+});
