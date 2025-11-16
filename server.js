@@ -3,7 +3,7 @@ const cors = require('cors');
 const mongoose = require('mongoose');
 
 // --- Configurazione Chiavi API ---
-const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+const stripeSecretKey = process.env.STRIPE_API_KEY;
 const sendGridApiKey = process.env.SENDGRID_API_KEY; 
 const mongoURI = process.env.MONGO_URI; 
 
