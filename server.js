@@ -11,7 +11,8 @@ const mongoose = require('mongoose');
 const stripeSecretKey = 'sk_test_51SH6tqFKiab6VU4qbmtTWbRiKigRjkAZ37LlQW5iK0ZVllbKd7Ys1AQE7Szza2HQJeAVI8M55AWkfBZ8yO6PIULN00tF5Ih95j'; 
 // Esempio: 'sk_test_51SH6tqFKiab6VU4q0Oe4mGaeB5vkNB3uI7v43qJSZbCw3l5OdHaMuoZzxrncTqKB7Ld7GUwg12OIICBKqbY8QCC00cDDziMq2';
 
-const sendGridApiKey = process.env.SENDGRID_API_KEY; 
+// Nuova configurazione (sicura)
+const stripeSecretKey = process.env.STRIPE_KEY_SICURA;
 const mongoURI = process.env.MONGO_URI; 
 
 // Inizializzazione Servizi
