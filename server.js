@@ -1,12 +1,10 @@
 const express = require('express');
-const cors = require('cors'); // Correzione dell'errore di battitura
+const cors = require('cors');
 const mongoose = require('mongoose');
 
 // --- Configurazione Chiavi API ---
-// Render leggerà queste variabili d'ambiente
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 const sendGridApiKey = process.env.SENDGRID_API_KEY; 
-// MONGO_URI viene presa dalle variabili d'ambiente di Render
 const mongoURI = process.env.MONGO_URI; 
 
 // Inizializzazione Servizi
@@ -29,7 +27,9 @@ app.use(express.json());
 
 const connectDB = async () => {
     try {
-        await mongoose.connect(mongoURI);
+        await mongoose.connect(mongoURI, {
+            serverSelectionTimeoutMS: 20000 
+        });
         console.log('MongoDB connesso con successo.');
     } catch (error) {
         console.error('Connessione MongoDB fallita:', error.message);
@@ -47,6 +47,10 @@ const ProductSchema = new mongoose.Schema({
 });
 
 const OrderSchema = new mongoose.Schema({
+    // NUOVI CAMPI AGGIUNTI
+    firstName: { type: String, required: false },
+    lastName: { type: String, required: false },
+    // FINE NUOVI CAMPI
     products: [ProductSchema],
     customerEmail: { type: String, required: true },
     totalAmount: { type: Number, required: true },
@@ -57,7 +61,7 @@ const OrderSchema = new mongoose.Schema({
 const Order = mongoose.model('Order', OrderSchema);
 
 // -------------------------------------------------------------
-// --- 3. Route per il Caricamento dei Prodotti (FIX DATI) ---
+// --- 3. Route per il Caricamento dei Prodotti ---
 // -------------------------------------------------------------
 
 app.get('/products', (req, res) => {
@@ -97,7 +101,8 @@ app.get('/products', (req, res) => {
 
 app.post('/create-payment-intent', async (req, res) => {
     try {
-        const { items, totalAmount, customerEmail, shipping } = req.body; 
+        // RICEVE ANCHE NOME E COGNOME
+        const { items, totalAmount, customerEmail, shipping, firstName, lastName } = req.body; 
 
         // 1. ELABORAZIONE PAGAMENTO CON STRIPE
         const paymentIntent = await stripe.paymentIntents.create({
@@ -109,6 +114,10 @@ app.post('/create-payment-intent', async (req, res) => {
 
         // 2. SALVATAGGIO DELL'ORDINE NEL DATABASE
         const newOrder = new Order({
+            // SALVA I NUOVI CAMPI
+            firstName: firstName,
+            lastName: lastName,
+            // FINE SALVATAGGIO NUOVI CAMPI
             products: items.map(item => ({
                 name: item.name,
                 quantity: item.quantity, 
@@ -127,17 +136,19 @@ app.post('/create-payment-intent', async (req, res) => {
         
         let shippingDetails = 'Nessun indirizzo di spedizione fornito.';
         
-        // **FIX: Controlla se 'shipping' e 'address' esistono prima di provare a leggerli**
+        // FIX: Controlla se 'shipping' e 'address' esistono
         if (shipping && shipping.address) {
             shippingDetails = `Spediremo a: ${shipping.address.line1 || ''}, ${shipping.address.city || ''}, ${shipping.address.postal_code || ''}`;
         }
+
+        const fullName = (firstName && lastName) ? `${firstName} ${lastName}` : 'Cliente';
         
         const msg = {
             to: customerEmail,
             from: 'bboyzinko@gmail.com', 
             subject: 'Conferma Ordine ead-shop',
             html: `
-                <h1>Grazie per il tuo ordine!</h1>
+                <h1>Ciao ${fullName}, grazie per il tuo ordine!</h1>
                 <p>Abbiamo ricevuto il tuo pagamento di €${(totalAmount / 100).toFixed(2)} e l'ordine è stato confermato (ID: ${newOrder._id}).</p>
                 <h2>Dettagli Ordine:</h2>
                 <pre>${productsList}</pre>
