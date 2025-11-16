@@ -3,12 +3,18 @@ const cors = require('cors');
 const mongoose = require('mongoose');
 
 // --- Configurazione Chiavi API ---
-// USA STRIPE_API_KEY come bypass per il problema di Render
-const stripeSecretKey = process.env.STRIPE_API_KEY; 
+// *******************************************************************
+// *** ATTENZIONE: INSERISCI QUI LA TUA CHIAVE SEGRETA sk_test_... ***
+// *******************************************************************
+// 
+// La chiave è hardcoded (codificata direttamente) per BYPASSARE il problema di Render.
+const stripeSecretKey = 'sk_test_51SH6tqFKiab6VU4qbmtTWbRiKigRjkAZ37LlQW5iK0ZVllbKd7Ys1AQE7Szza2HQJeAVI8M55AWkfBZ8yO6PIULN00tF5Ih95j'; 
+// Esempio: 'sk_test_51SH6tqFKiab6VU4q0Oe4mGaeB5vkNB3uI7v43qJSZbCw3l5OdHaMuoZzxrncTqKB7Ld7GUwg12OIICBKqbY8QCC00cDDziMq2';
+
 const sendGridApiKey = process.env.SENDGRID_API_KEY; 
 const mongoURI = process.env.MONGO_URI; 
 
-// Inizializzazione Servizi (Una sola volta e solo dopo la configurazione delle chiavi)
+// Inizializzazione Servizi
 const stripe = require('stripe')(stripeSecretKey); 
 const sgMail = require('@sendgrid/mail');
 sgMail.setApiKey(sendGridApiKey);
@@ -48,11 +54,9 @@ const ProductSchema = new mongoose.Schema({
 });
 
 const OrderSchema = new mongoose.Schema({
-    // CAMPI CLIENTE E SPEDIZIONE AGGIUNTI
     firstName: { type: String, required: false },
     lastName: { type: String, required: false },
-    shippingAddress: { type: Object, required: false }, // Salva l'oggetto completo di Stripe
-    // FINE CAMPI AGGIUNTI
+    shippingAddress: { type: Object, required: false },
     products: [ProductSchema],
     customerEmail: { type: String, required: true },
     totalAmount: { type: Number, required: true },
@@ -114,11 +118,9 @@ app.post('/create-payment-intent', async (req, res) => {
 
         // 2. SALVATAGGIO DELL'ORDINE NEL DATABASE
         const newOrder = new Order({
-            // SALVA I CAMPI DEL CLIENTE E SPEDIZIONE
             firstName: firstName,
             lastName: lastName,
             shippingAddress: shipping, 
-            // FINE SALVATAGGIO NUOVI CAMPI
             products: items.map(item => ({
                 name: item.name,
                 quantity: item.quantity, 
@@ -166,7 +168,6 @@ app.post('/create-payment-intent', async (req, res) => {
 
     } catch (error) {
         console.error('Errore critico nella route di pagamento:', error.message);
-        // Questo errore potrebbe ancora essere l'API key non valida se non è sk_test_...
         res.status(500).json({ error: 'Errore dal server: impossibile creare l\'intenzione di pagamento.' });
     }
 });
