@@ -4,15 +4,14 @@ const mongoose = require('mongoose');
 
 // --- Configurazione Chiavi API ---
 // *******************************************************************
-// *** ATTENZIONE: INSERISCI QUI LA TUA CHIAVE SEGRETA sk_test_... ***
+// *** AZIONE CRITICA: INSERISCI QUI LA TUA CHIAVE SEGRETA sk_test_... ***
 // *******************************************************************
 // 
-// La chiave è hardcoded (codificata direttamente) per BYPASSARE il problema di Render.
+// La chiave è hardcoded (codificata direttamente) per un ULTIMO TEST.
+// SE QUESTO FUNZIONA, IL PROBLEMA ERA SOLO RENDER CHE CORROMPEVA LA VARIABILE.
 const stripeSecretKey = 'sk_test_51SH6tqFKiab6VU4qbmtTWbRiKigRjkAZ37LlQW5iK0ZVllbKd7Ys1AQE7Szza2HQJeAVI8M55AWkfBZ8yO6PIULN00tF5Ih95j'; 
-// Esempio: 'sk_test_51SH6tqFKiab6VU4q0Oe4mGaeB5vkNB3uI7v43qJSZbCw3l5OdHaMuoZzxrncTqKB7Ld7GUwg12OIICBKqbY8QCC00cDDziMq2';
 
-// Nuova configurazione (sicura)
-const stripeSecretKey = process.env.STRIPE_KEY_SICURA;
+const sendGridApiKey = process.env.SENDGRID_API_KEY; 
 const mongoURI = process.env.MONGO_URI; 
 
 // Inizializzazione Servizi
@@ -35,6 +34,7 @@ app.use(express.json());
 
 const connectDB = async () => {
     try {
+        // NON USARE piú opzioni deprecate
         await mongoose.connect(mongoURI, {
             serverSelectionTimeoutMS: 20000 
         });
@@ -55,9 +55,11 @@ const ProductSchema = new mongoose.Schema({
 });
 
 const OrderSchema = new mongoose.Schema({
+    // Campi per il cliente
     firstName: { type: String, required: false },
     lastName: { type: String, required: false },
     shippingAddress: { type: Object, required: false },
+    
     products: [ProductSchema],
     customerEmail: { type: String, required: true },
     totalAmount: { type: Number, required: true },
@@ -109,7 +111,7 @@ app.post('/create-payment-intent', async (req, res) => {
     try {
         const { items, totalAmount, customerEmail, shipping, firstName, lastName } = req.body; 
 
-        // 1. ELABORAZIONE PAGAMENTO CON STRIPE
+        // 1. ELABORAZIONE PAGAMENTO CON STRIPE (USA LA CHIAVE HARDCODED)
         const paymentIntent = await stripe.paymentIntents.create({
             amount: totalAmount, 
             currency: 'eur',
