@@ -3,17 +3,13 @@ const cors = require('cors');
 const mongoose = require('mongoose');
 
 // --- Configurazione Chiavi API ---
-const stripeSecretKey = process.env.STRIPE_API_KEY || process.env.STRIPE_SECRET_KEY; 
-// ...
-// Inizializzazione Servizi
-// Usa sempre la variabile giusta, ma ora Stripe la leggerà in modo dinamico
+// USA STRIPE_API_KEY come bypass per il problema di Render
+const stripeSecretKey = process.env.STRIPE_API_KEY; 
+const sendGridApiKey = process.env.SENDGRID_API_KEY; 
+const mongoURI = process.env.MONGO_URI; 
+
+// Inizializzazione Servizi (Una sola volta e solo dopo la configurazione delle chiavi)
 const stripe = require('stripe')(stripeSecretKey); 
-
-// TEMPORANEO: Logga la chiave che Stripe sta usando per il debug!
-console.log('Chiave Stripe letta (prime 4 cifre):', stripeSecretKey ? stripeSecretKey.substring(0, 4) : 'CHIAVE NON TROVATA');
-
-// Inizializzazione Servizi
-const stripe = require('stripe')(stripeSecretKey);
 const sgMail = require('@sendgrid/mail');
 sgMail.setApiKey(sendGridApiKey);
 
@@ -52,14 +48,14 @@ const ProductSchema = new mongoose.Schema({
 });
 
 const OrderSchema = new mongoose.Schema({
-    // NUOVI CAMPI AGGIUNTI
+    // CAMPI CLIENTE E SPEDIZIONE AGGIUNTI
     firstName: { type: String, required: false },
     lastName: { type: String, required: false },
-    // FINE NUOVI CAMPI
+    shippingAddress: { type: Object, required: false }, // Salva l'oggetto completo di Stripe
+    // FINE CAMPI AGGIUNTI
     products: [ProductSchema],
     customerEmail: { type: String, required: true },
     totalAmount: { type: Number, required: true },
-    shippingAddress: { type: Object, required: false },
     orderDate: { type: Date, default: Date.now }
 });
 
@@ -70,7 +66,7 @@ const Order = mongoose.model('Order', OrderSchema);
 // -------------------------------------------------------------
 
 app.get('/products', (req, res) => {
-    // LISTA PRODOTTI ORIGINALE E COMPLETA per il frontend
+    // LISTA PRODOTTI EAD SHOP
     const items = [
         {
             "id": "prod_canotta",
@@ -94,7 +90,7 @@ app.get('/products', (req, res) => {
                 "colore": ["bianco", "nero", "grigio"]
             }
         }
-        // AGGIUNGI QUI TUTTI GLI ALTRI TUOI PRODOTTI ORIGINALI!
+        // AGGIUNGI QUI GLI ALTRI TUOI PRODOTTI
     ];
     res.json(items);
 });
@@ -106,7 +102,6 @@ app.get('/products', (req, res) => {
 
 app.post('/create-payment-intent', async (req, res) => {
     try {
-        // RICEVE ANCHE NOME E COGNOME
         const { items, totalAmount, customerEmail, shipping, firstName, lastName } = req.body; 
 
         // 1. ELABORAZIONE PAGAMENTO CON STRIPE
@@ -119,9 +114,10 @@ app.post('/create-payment-intent', async (req, res) => {
 
         // 2. SALVATAGGIO DELL'ORDINE NEL DATABASE
         const newOrder = new Order({
-            // SALVA I NUOVI CAMPI
+            // SALVA I CAMPI DEL CLIENTE E SPEDIZIONE
             firstName: firstName,
             lastName: lastName,
+            shippingAddress: shipping, 
             // FINE SALVATAGGIO NUOVI CAMPI
             products: items.map(item => ({
                 name: item.name,
@@ -130,18 +126,16 @@ app.post('/create-payment-intent', async (req, res) => {
             })),
             customerEmail: customerEmail,
             totalAmount: totalAmount,
-            shippingAddress: shipping 
         });
 
         await newOrder.save();
         console.log('Ordine salvato con ID:', newOrder._id);
 
-        // 3. INVIO EMAIL DI CONFERMA (Logica SendGrid con FIX)
+        // 3. INVIO EMAIL DI CONFERMA (Logica SendGrid)
         const productsList = items.map(item => `${item.name} (${item.quantity}x @ €${(item.price / 100).toFixed(2)})`).join('\n');
         
         let shippingDetails = 'Nessun indirizzo di spedizione fornito.';
         
-        // FIX: Controlla se 'shipping' e 'address' esistono
         if (shipping && shipping.address) {
             shippingDetails = `Spediremo a: ${shipping.address.line1 || ''}, ${shipping.address.city || ''}, ${shipping.address.postal_code || ''}`;
         }
@@ -151,7 +145,7 @@ app.post('/create-payment-intent', async (req, res) => {
         const msg = {
             to: customerEmail,
             from: 'bboyzinko@gmail.com', 
-            subject: 'Conferma Ordine ead-shop',
+            subject: 'Conferma Ordine EAD Shop',
             html: `
                 <h1>Ciao ${fullName}, grazie per il tuo ordine!</h1>
                 <p>Abbiamo ricevuto il tuo pagamento di €${(totalAmount / 100).toFixed(2)} e l'ordine è stato confermato (ID: ${newOrder._id}).</p>
@@ -165,13 +159,14 @@ app.post('/create-payment-intent', async (req, res) => {
             await sgMail.send(msg);
             console.log(`Email di conferma inviata a: ${customerEmail}`);
         } catch (error) {
-            console.error('ERRORE INVIO EMAIL (SendGrid):', error); 
+            console.error('ERRORE INVIO EMAIL (SendGrid):', error.message); 
         }
 
         res.json({ clientSecret: paymentIntent.client_secret });
 
     } catch (error) {
         console.error('Errore critico nella route di pagamento:', error.message);
+        // Questo errore potrebbe ancora essere l'API key non valida se non è sk_test_...
         res.status(500).json({ error: 'Errore dal server: impossibile creare l\'intenzione di pagamento.' });
     }
 });
