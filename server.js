@@ -3,14 +3,8 @@ const cors = require('cors');
 const mongoose = require('mongoose');
 
 // --- Configurazione Chiavi API ---
-// *******************************************************************
-// *** AZIONE CRITICA: INSERISCI QUI LA TUA CHIAVE SEGRETA sk_test_... ***
-// *******************************************************************
-// 
-// La chiave è hardcoded (codificata direttamente) per un ULTIMO TEST.
-// SE QUESTO FUNZIONA, IL PROBLEMA ERA SOLO RENDER CHE CORROMPEVA LA VARIABILE.
+// La chiave è hardcoded (codificata direttamente) per BYPASSARE il problema di Render.
 const stripeSecretKey = 'sk_test_51SH6tqFKiab6VU4qbmtTWbRiKigRjkAZ37LlQW5iK0ZVllbKd7Ys1AQE7Szza2HQJeAVI8M55AWkfBZ8yO6PIULN00tF5Ih95j'; 
-
 const sendGridApiKey = process.env.SENDGRID_API_KEY; 
 const mongoURI = process.env.MONGO_URI; 
 
@@ -30,11 +24,10 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// --- 1. Connessione a MongoDB ---
+// --- 1. Connessione a MongoDB e Schema ---
 
 const connectDB = async () => {
     try {
-        // NON USARE piú opzioni deprecate
         await mongoose.connect(mongoURI, {
             serverSelectionTimeoutMS: 20000 
         });
@@ -43,10 +36,7 @@ const connectDB = async () => {
         console.error('Connessione MongoDB fallita:', error.message);
     }
 };
-
 connectDB();
-
-// --- 2. Schema e Modello degli Ordini (Mongoose) ---
 
 const ProductSchema = new mongoose.Schema({
     name: { type: String, required: true },
@@ -55,11 +45,9 @@ const ProductSchema = new mongoose.Schema({
 });
 
 const OrderSchema = new mongoose.Schema({
-    // Campi per il cliente
     firstName: { type: String, required: false },
     lastName: { type: String, required: false },
     shippingAddress: { type: Object, required: false },
-    
     products: [ProductSchema],
     customerEmail: { type: String, required: true },
     totalAmount: { type: Number, required: true },
@@ -73,30 +61,9 @@ const Order = mongoose.model('Order', OrderSchema);
 // -------------------------------------------------------------
 
 app.get('/products', (req, res) => {
-    // LISTA PRODOTTI EAD SHOP
     const items = [
-        {
-            "id": "prod_canotta",
-            "name": "Canotta 10 Elements Camp",
-            "price": 2500, // €25.00
-            "currency": "eur",
-            "image": "immagini/shop/canotta.jpg",
-            "options": {
-                "taglia": ["XS", "S", "M", "L", "XL", "XXL"],
-                "colore": ["bianco", "nero", "grigio"]
-            }
-        },
-        {
-            "id": "prod_croptop",
-            "name": "Crop Top Donna Elements",
-            "price": 2000, // €20.00
-            "currency": "eur",
-            "image": "immagini/shop/croptopdonnanero.jpg",
-            "options": {
-                "taglia": ["XS", "S", "M", "L"],
-                "colore": ["bianco", "nero", "grigio"]
-            }
-        }
+        { "id": "prod_canotta", "name": "Canotta 10 Elements Camp", "price": 2500, "currency": "eur", "image": "immagini/shop/canotta.jpg", "options": { "taglia": ["XS", "S", "M", "L", "XL", "XXL"], "colore": ["bianco", "nero", "grigio"] } },
+        { "id": "prod_croptop", "name": "Crop Top Donna Elements", "price": 2000, "currency": "eur", "image": "immagini/shop/croptopdonnanero.jpg", "options": { "taglia": ["XS", "S", "M", "L"], "colore": ["bianco", "nero", "grigio"] } }
         // AGGIUNGI QUI GLI ALTRI TUOI PRODOTTI
     ];
     res.json(items);
@@ -104,14 +71,14 @@ app.get('/products', (req, res) => {
 
 
 // -------------------------------------------------------------
-// --- 4. Route di Pagamento e Salvataggio Ordini ---
+// --- 4. Route di Pagamento: SOLO CREAZIONE INTENT ---
 // -------------------------------------------------------------
 
 app.post('/create-payment-intent', async (req, res) => {
     try {
-        const { items, totalAmount, customerEmail, shipping, firstName, lastName } = req.body; 
+        const { totalAmount, customerEmail } = req.body; 
 
-        // 1. ELABORAZIONE PAGAMENTO CON STRIPE (USA LA CHIAVE HARDCODED)
+        // 1. ELABORAZIONE PAGAMENTO CON STRIPE
         const paymentIntent = await stripe.paymentIntents.create({
             amount: totalAmount, 
             currency: 'eur',
@@ -119,7 +86,26 @@ app.post('/create-payment-intent', async (req, res) => {
             receipt_email: customerEmail,
         });
 
-        // 2. SALVATAGGIO DELL'ORDINE NEL DATABASE
+        // NON SALVIAMO NIENTE QUI!
+
+        res.json({ clientSecret: paymentIntent.client_secret });
+
+    } catch (error) {
+        console.error('Errore critico nella route di pagamento (Intento):', error.message);
+        res.status(500).json({ error: 'Errore dal server: impossibile creare l\'intenzione di pagamento.' });
+    }
+});
+
+
+// -------------------------------------------------------------
+// --- 5. NUOVA Route: Salva Ordine SOLO Dopo Conferma Stripe ---
+// -------------------------------------------------------------
+
+app.post('/save-order', async (req, res) => {
+    try {
+        const { items, totalAmount, customerEmail, shipping, firstName, lastName } = req.body; 
+
+        // 1. SALVATAGGIO DELL'ORDINE NEL DATABASE
         const newOrder = new Order({
             firstName: firstName,
             lastName: lastName,
@@ -132,19 +118,16 @@ app.post('/create-payment-intent', async (req, res) => {
             customerEmail: customerEmail,
             totalAmount: totalAmount,
         });
-
         await newOrder.save();
         console.log('Ordine salvato con ID:', newOrder._id);
 
-        // 3. INVIO EMAIL DI CONFERMA (Logica SendGrid)
+        // 2. INVIO EMAIL DI CONFERMA 
         const productsList = items.map(item => `${item.name} (${item.quantity}x @ €${(item.price / 100).toFixed(2)})`).join('\n');
         
         let shippingDetails = 'Nessun indirizzo di spedizione fornito.';
-        
         if (shipping && shipping.address) {
             shippingDetails = `Spediremo a: ${shipping.address.line1 || ''}, ${shipping.address.city || ''}, ${shipping.address.postal_code || ''}`;
         }
-
         const fullName = (firstName && lastName) ? `${firstName} ${lastName}` : 'Cliente';
         
         const msg = {
@@ -153,7 +136,7 @@ app.post('/create-payment-intent', async (req, res) => {
             subject: 'Conferma Ordine EAD Shop',
             html: `
                 <h1>Ciao ${fullName}, grazie per il tuo ordine!</h1>
-                <p>Abbiamo ricevuto il tuo pagamento di €${(totalAmount / 100).toFixed(2)} e l'ordine è stato confermato (ID: ${newOrder._id}).</p>
+                <p>Abbiamo ricevuto la conferma di pagamento e il tuo ordine è stato salvato (ID: ${newOrder._id}).</p>
                 <h2>Dettagli Ordine:</h2>
                 <pre>${productsList}</pre>
                 <p>${shippingDetails}</p>
@@ -167,17 +150,17 @@ app.post('/create-payment-intent', async (req, res) => {
             console.error('ERRORE INVIO EMAIL (SendGrid):', error.message); 
         }
 
-        res.json({ clientSecret: paymentIntent.client_secret });
+        res.json({ success: true, orderId: newOrder._id });
 
     } catch (error) {
-        console.error('Errore critico nella route di pagamento:', error.message);
-        res.status(500).json({ error: 'Errore dal server: impossibile creare l\'intenzione di pagamento.' });
+        console.error('Errore durante il salvataggio dell\'ordine:', error.message);
+        res.status(500).json({ error: 'Impossibile salvare l\'ordine dopo il pagamento.' });
     }
 });
 
 
 // -------------------------------------------------------------
-// --- 5. Route Amministrativa per Visualizzare gli Ordini ---
+// --- 6. Route Amministrativa per Visualizzare gli Ordini ---
 // -------------------------------------------------------------
 
 app.get('/admin/orders', async (req, res) => {
