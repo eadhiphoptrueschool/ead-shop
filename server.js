@@ -3,9 +3,14 @@ const cors = require('cors');
 const mongoose = require('mongoose');
 
 // --- Configurazione Chiavi API ---
-const stripeSecretKey = process.env.STRIPE_API_KEY;
-const sendGridApiKey = process.env.SENDGRID_API_KEY; 
-const mongoURI = process.env.MONGO_URI; 
+const stripeSecretKey = process.env.STRIPE_API_KEY || process.env.STRIPE_SECRET_KEY; 
+// ...
+// Inizializzazione Servizi
+// Usa sempre la variabile giusta, ma ora Stripe la leggerà in modo dinamico
+const stripe = require('stripe')(stripeSecretKey); 
+
+// TEMPORANEO: Logga la chiave che Stripe sta usando per il debug!
+console.log('Chiave Stripe letta (prime 4 cifre):', stripeSecretKey ? stripeSecretKey.substring(0, 4) : 'CHIAVE NON TROVATA');
 
 // Inizializzazione Servizi
 const stripe = require('stripe')(stripeSecretKey);
